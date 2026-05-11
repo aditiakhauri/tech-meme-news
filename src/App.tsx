@@ -63,9 +63,7 @@ export default function App() {
 
       {isMock && (
         <div className="demo-pill">
-          📰 Demo mode —{' '}
-          <a href="https://newsapi.org/" target="_blank" rel="noopener noreferrer">add API key</a>
-          {' '}for live news
+          ⚠️ RSS feeds unavailable — showing cached stories
         </div>
       )}
 
