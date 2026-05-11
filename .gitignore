@@ -5,3 +5,7 @@ dist/
 *.local
 .vite/
 .claude/
+dist/
+tsconfig*.tsbuildinfo
+vite.config.d.ts
+vite.config.js
