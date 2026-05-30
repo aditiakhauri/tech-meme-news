@@ -2,7 +2,8 @@ const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
 const Parser = require('rss-parser');
-require('dotenv').config();
+require('dotenv').config({ path: '.env.local' }); // .env.local takes precedence
+require('dotenv').config();                        // fallback to .env
 
 const app = express();
 app.use(cors());
@@ -85,6 +86,27 @@ function extractImage(item) {
 }
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', mode: 'rss' }));
+
+app.post('/api/meme', async (req, res) => {
+  const { template_id, text0, text1 } = req.body;
+  try {
+    const params = new URLSearchParams({
+      template_id: template_id || '181913649',
+      username: process.env.IMGFLIP_USERNAME || 'imgflip_hubot',
+      password: process.env.IMGFLIP_PASSWORD || 'imgflip_hubot',
+      text0: text0 || '',
+      text1: text1 || '',
+    });
+    const { data } = await axios.post(
+      'https://api.imgflip.com/caption_image',
+      params.toString(),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 8000 }
+    );
+    res.json(data);
+  } catch (err) {
+    res.json({ success: false, error_message: err.message });
+  }
+});
 
 app.get('/api/news', async (req, res) => {
   const { category = 'general', page = 1 } = req.query;

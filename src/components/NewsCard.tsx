@@ -1,7 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Article, CATEGORIES } from '../types/news';
-import { getMemeCaption, getCardEmoji, getCardRotation, getGiphyQuery } from '../utils/memeTransformer';
+import { getMemeCaption, getSimpleSummary, getCardEmoji, getCardRotation, getGiphyQuery } from '../utils/memeTransformer';
 import { useGiphy } from '../hooks/useGiphy';
+import { useImgflipMeme } from '../hooks/useImgflipMeme';
+import { extractKeywords, escapeRegex } from '../utils/keywordExtractor';
+import WikiPanel from './WikiPanel';
 
 interface Props {
   article: Article;
@@ -27,18 +30,58 @@ function stableNum(seed: string, max: number): number {
 
 const STICKERS = ['✦','★','✶','◆','✸','❋','⬡','◉'];
 const TAG_LINES = [
-  'BREAKING', 'JUST DROPPED', 'NO CAP', 'RENT FREE', 'MAIN CHARACTER',
-  'UNDERSTOOD', 'ATE FR', 'NOT OKAY', 'BRAIN ROT', 'DELULU',
+  'BREAKING', 'JUST IN', 'DEVELOPING', 'EXCLUSIVE', 'TOP STORY',
+  'ANALYSIS', 'TRENDING', 'MUST READ', 'LATEST', 'IN FOCUS',
 ];
+
+function HighlightedText({ text, keywords, onKeyword, className }: {
+  text: string;
+  keywords: string[];
+  onKeyword: (kw: string) => void;
+  className?: string;
+}) {
+  if (keywords.length === 0) return <>{text}</>;
+  try {
+    const pattern = new RegExp(`\\b(${keywords.map(escapeRegex).join('|')})\\b`, 'gi');
+    const parts = text.split(pattern);
+    const kwSet = new Set(keywords);
+    return (
+      <>
+        {parts.map((part, i) =>
+          kwSet.has(part) ? (
+            <span
+              key={i}
+              className={`keyword-chip${className ? ' ' + className : ''}`}
+              onClick={e => { e.stopPropagation(); onKeyword(part); }}
+            >
+              {part}
+            </span>
+          ) : part
+        )}
+      </>
+    );
+  } catch {
+    return <>{text}</>;
+  }
+}
 
 export default function NewsCard({ article, isActive, index }: Props) {
   const [liked, setLiked] = useState(false);
+  const [wikiTerm, setWikiTerm] = useState<string | null>(null);
   const cat = CATEGORIES.find(c => c.id === article.category) ?? CATEGORIES[0];
+
+  useEffect(() => {
+    if (!isActive) setWikiTerm(null);
+  }, [isActive]);
   const meme = getMemeCaption(article);
+  const tldr = getSimpleSummary(article);
   const decorEmoji = getCardEmoji(article.category, article.id);
   const gifRotation = getCardRotation(article.id);
   const giphyQuery = getGiphyQuery(article);
   const { gifUrl, loading: gifLoading } = useGiphy(giphyQuery, isActive);
+  const { memeUrl, loading: memeLoading } = useImgflipMeme(article);
+
+  const keywords = extractKeywords(article.title + (article.description ? ' ' + article.description : ''));
 
   const likeCount = 1000 + stableNum(article.id + 'l', 8999);
   const shareCount = 200 + stableNum(article.id + 's', 2800);
@@ -112,17 +155,41 @@ export default function NewsCard({ article, isActive, index }: Props) {
           className="meme-caption"
           style={{ '--g1': cat.color, '--g2': cat.glow } as React.CSSProperties}
         >
-          {meme}
+          <HighlightedText text={meme} keywords={keywords} onKeyword={setWikiTerm} className="kw-in-caption" />
         </p>
+
+        <div className="tldr-row">
+          <span className="tldr-label">basically:</span>
+          <span className="tldr-text">{tldr}</span>
+        </div>
 
         <div className="divider-line" style={{ background: `linear-gradient(90deg, ${cat.color}, transparent)` }} />
 
-        <p className="real-headline">{article.title}</p>
+        <p className="real-headline">
+          <HighlightedText text={article.title} keywords={keywords} onKeyword={setWikiTerm} />
+        </p>
+
+        {(memeLoading || memeUrl) && (
+          <div className="imgflip-meme">
+            {memeLoading && <div className="imgflip-meme-shimmer" />}
+            {memeUrl && !memeLoading && (
+              <img src={memeUrl} alt="meme" loading="lazy" />
+            )}
+          </div>
+        )}
 
         {article.description && (
           <p className="card-desc">
-            {article.description.length > 110 ? article.description.slice(0, 107) + '…' : article.description}
+            <HighlightedText
+              text={article.description.length > 110 ? article.description.slice(0, 107) + '…' : article.description}
+              keywords={keywords}
+              onKeyword={setWikiTerm}
+            />
           </p>
+        )}
+
+        {keywords.length > 0 && (
+          <div className="keyword-hint">tap highlighted terms to explore</div>
         )}
 
         <a
@@ -171,6 +238,10 @@ export default function NewsCard({ article, isActive, index }: Props) {
           <span>scroll</span>
           <span className="nudge-arrow">↑</span>
         </div>
+      )}
+
+      {wikiTerm && (
+        <WikiPanel term={wikiTerm} catColor={cat.color} headline={article.title} onClose={() => setWikiTerm(null)} />
       )}
     </div>
   );
